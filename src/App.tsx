@@ -29,9 +29,23 @@ export default function App() {
     fontSize: 24,
     opacity: 0.9,
     textAlign: 'center' as 'left' | 'center' | 'right',
+    fontFamily: 'Noto Sans Devanagari',
+    fontWeight: '700' as '300' | '400' | '700',
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const fonts = [
+    { name: 'Modern', value: 'Noto Sans Devanagari' },
+    { name: 'Artistic', value: 'Laila' },
+    { name: 'Traditional', value: 'Tiro Devanagari Hindi' },
+  ];
+
+  const weights = [
+    { name: 'Light', value: '300' },
+    { name: 'Regular', value: '400' },
+    { name: 'Bold', value: '700' },
+  ];
 
   const loadingMessages = [
     "Understanding the emotion...",
@@ -144,7 +158,7 @@ export default function App() {
     ctx.globalAlpha = textConfig.opacity;
     ctx.textAlign = textConfig.textAlign;
     ctx.textBaseline = 'top';
-    ctx.font = `bold 64px "Noto Sans Devanagari", sans-serif`;
+    ctx.font = `${textConfig.fontWeight} 64px "${textConfig.fontFamily}", sans-serif`;
 
     const lines = quote.split('\n');
     const lineHeight = 80;
@@ -239,6 +253,36 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Font Style</label>
+              <div className="flex flex-wrap gap-2">
+                {fonts.map(f => (
+                  <button
+                    key={f.value}
+                    onClick={() => setTextConfig(prev => ({ ...prev, fontFamily: f.value }))}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-full border border-ink/10 transition-all ${textConfig.fontFamily === f.value ? 'bg-ink text-paper' : 'hover:bg-ink/5'}`}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Weight</label>
+              <div className="flex flex-wrap gap-2">
+                {weights.map(w => (
+                  <button
+                    key={w.value}
+                    onClick={() => setTextConfig(prev => ({ ...prev, fontWeight: w.value as any }))}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-full border border-ink/10 transition-all ${textConfig.fontWeight === w.value ? 'bg-ink text-paper' : 'hover:bg-ink/5'}`}
+                  >
+                    {w.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <button
@@ -313,12 +357,14 @@ export default function App() {
                     referrerPolicy="no-referrer"
                   />
                   <div 
-                    className="absolute inset-x-0 top-[10%] px-6 whitespace-pre-wrap hindi font-bold leading-tight select-none"
+                    className="absolute inset-x-0 top-[10%] px-6 whitespace-pre-wrap font-bold leading-tight select-none"
                     style={{ 
                       color: textConfig.color, 
                       opacity: textConfig.opacity,
                       fontSize: `${textConfig.fontSize}px`,
-                      textAlign: textConfig.textAlign
+                      textAlign: textConfig.textAlign,
+                      fontFamily: textConfig.fontFamily,
+                      fontWeight: textConfig.fontWeight
                     }}
                   >
                     {quote}
