@@ -6,10 +6,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, Download, Loader2, Sparkles, RefreshCw, Info, AlertCircle, Type as TypeIcon } from 'lucide-react';
+import { Send, Download, Loader2, Sparkles, RefreshCw, Info, AlertCircle, Type as TypeIcon, AlignLeft, AlignCenter, AlignRight, Key } from 'lucide-react';
 
-// Initialize Gemini AI
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// Declare window interface for AI Studio global methods
+declare global {
+  interface Window {
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
 
 export default function App() {
   const [quote, setQuote] = useState('');
@@ -21,6 +28,7 @@ export default function App() {
     color: '#1a1a1a',
     fontSize: 24,
     opacity: 0.9,
+    textAlign: 'center' as 'left' | 'center' | 'right',
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,6 +44,19 @@ export default function App() {
   const generateImage = async () => {
     if (!quote.trim()) return;
 
+    // API Key Selection check for Shared/Live environment
+    if (typeof window !== 'undefined' && window.aistudio) {
+      try {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          await window.aistudio.openSelectKey();
+          // Instructions say to proceed assuming success
+        }
+      } catch (e) {
+        console.error("Key selection error:", e);
+      }
+    }
+
     setIsGenerating(true);
     setError(null);
     setGeneratedImage(null);
@@ -47,9 +68,10 @@ export default function App() {
     }, 2000);
 
     try {
+      // Create a fresh instance to use the latest selected API key
+      const currentAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
       const model = "gemini-2.5-flash-image";
       
-      // Prompt focused solely on visual art, NO text
       const prompt = `
         Create a vertical 9:16 aspect ratio image. 
         Style: minimalistic black pen scribble sketch on a warm paper texture (yellow/brown tone).
@@ -60,7 +82,7 @@ export default function App() {
         The image should be a clean background with the sketch only.
       `;
 
-      const response = await genAI.models.generateContent({
+      const response = await currentAI.models.generateContent({
         model: model,
         contents: {
           parts: [{ text: prompt }],
@@ -87,7 +109,12 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Generation error:", err);
-      setError(err.message || "Something went wrong while generating the image.");
+      if (err.message?.includes("Requested entity was not found")) {
+        setError("API Key issue detected. Please try selecting your key again.");
+        if (window.aistudio) window.aistudio.openSelectKey();
+      } else {
+        setError(err.message || "Something went wrong while generating the image.");
+      }
     } finally {
       clearInterval(interval);
       setIsGenerating(false);
@@ -109,31 +136,29 @@ export default function App() {
       img.onload = resolve;
     });
 
-    // Set canvas to high resolution 9:16 (1080x1920)
     canvas.width = 1080;
     canvas.height = 1920;
-
-    // Draw background image
     ctx.drawImage(img, 0, 0, 1080, 1920);
 
-    // Draw text overlay
     ctx.fillStyle = textConfig.color;
     ctx.globalAlpha = textConfig.opacity;
-    ctx.textAlign = 'center';
+    ctx.textAlign = textConfig.textAlign;
     ctx.textBaseline = 'top';
-    
-    // Use Noto Sans Devanagari for Hindi support
     ctx.font = `bold 64px "Noto Sans Devanagari", sans-serif`;
 
     const lines = quote.split('\n');
     const lineHeight = 80;
     const startY = 150;
+    
+    // Calculate X based on alignment
+    let x = 540; // center
+    if (textConfig.textAlign === 'left') x = 80;
+    if (textConfig.textAlign === 'right') x = 1000;
 
     lines.forEach((line, index) => {
-      ctx.fillText(line, 540, startY + (index * lineHeight));
+      ctx.fillText(line, x, startY + (index * lineHeight));
     });
 
-    // Trigger download
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/png', 1.0);
     link.download = `reel-sketch-${Date.now()}.png`;
@@ -142,10 +167,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-paper text-ink selection:bg-ink/10">
-      {/* Hidden canvas for high-res generation */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Header */}
       <motion.header 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -160,7 +183,6 @@ export default function App() {
       </motion.header>
 
       <main className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-        {/* Input Section */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -178,10 +200,10 @@ export default function App() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Text Color</label>
-              <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 bg-white/20 border border-ink/5 rounded-3xl">
+            <div className="space-y-3">
+              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Appearance</label>
+              <div className="flex flex-wrap gap-2">
                 {['#1a1a1a', '#4a4a4a', '#8e8e8e', '#f5f2ed'].map(c => (
                   <button
                     key={c}
@@ -191,9 +213,6 @@ export default function App() {
                   />
                 ))}
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Text Opacity</label>
               <input 
                 type="range" 
                 min="0.1" max="1" step="0.1" 
@@ -201,6 +220,24 @@ export default function App() {
                 onChange={(e) => setTextConfig(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
                 className="w-full accent-ink"
               />
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] uppercase tracking-widest font-bold opacity-40">Alignment</label>
+              <div className="flex gap-2">
+                {(['left', 'center', 'right'] as const).map(align => (
+                  <button
+                    key={align}
+                    onClick={() => setTextConfig(prev => ({ ...prev, textAlign: align }))}
+                    className={`p-2 hover:bg-ink/5 rounded-lg transition-colors ${textConfig.textAlign === align ? 'bg-ink/10 ring-1 ring-ink/20' : ''}`}
+                    title={`${align.charAt(0).toUpperCase() + align.slice(1)} Align`}
+                  >
+                    {align === 'left' && <AlignLeft className="w-4 h-4 opacity-60" />}
+                    {align === 'center' && <AlignCenter className="w-4 h-4 opacity-60" />}
+                    {align === 'right' && <AlignRight className="w-4 h-4 opacity-60" />}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -236,15 +273,14 @@ export default function App() {
           <div className="p-6 bg-white/30 border border-ink/5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest opacity-40">
               <Info className="w-4 h-4" />
-              <span>Text Accuracy Guaranteed</span>
+              <span>Live Mode Note</span>
             </div>
             <p className="text-[11px] opacity-50 leading-relaxed">
-              We render your text using a high-fidelity typography engine. This ensures 100% accuracy for Devanagari and Hinglish, avoiding AI spelling errors.
+              In shared mode, you'll be asked to select your Gemini API key. This ensures the app uses your own quota for image generation.
             </p>
           </div>
         </motion.div>
 
-        {/* Preview Section */}
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -276,13 +312,13 @@ export default function App() {
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
-                  {/* Text Overlay Layer */}
                   <div 
-                    className="absolute inset-x-0 top-[10%] px-6 text-center whitespace-pre-wrap hindi font-bold leading-tight select-none"
+                    className="absolute inset-x-0 top-[10%] px-6 whitespace-pre-wrap hindi font-bold leading-tight select-none"
                     style={{ 
                       color: textConfig.color, 
                       opacity: textConfig.opacity,
-                      fontSize: `${textConfig.fontSize}px`
+                      fontSize: `${textConfig.fontSize}px`,
+                      textAlign: textConfig.textAlign
                     }}
                   >
                     {quote}
@@ -344,7 +380,6 @@ export default function App() {
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="mt-20 text-center opacity-20 text-[10px] uppercase tracking-[0.2em]">
         &copy; 2026 Aesthetic Reel Sketch Creator &bull; Powered by Gemini AI
       </footer>
